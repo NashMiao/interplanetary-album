@@ -146,9 +146,11 @@ def unlock_identity():
         return json.jsonify({'result': e.args[1]}), 500
     if isinstance(default_identity_account, Account):
         msg = ''.join(['unlock ', ont_id_selected, ' successful!'])
-        return json.jsonify({'result': msg}), 200
+        redirect_url = request.url.replace('unlock_identity', '')
+        return json.jsonify({'result': msg, 'redirect_url': redirect_url}), 200
     else:
-        return json.jsonify({'result': 'unlock failed!'}), 501
+        redirect_url = request.url.replace('unlock_identity', 'login')
+        return json.jsonify({'result': 'unlock failed!', 'redirect_url': redirect_url}), 501
 
 
 @app.route('/favicon.ico')
