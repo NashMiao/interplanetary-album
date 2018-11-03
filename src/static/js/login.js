@@ -4,12 +4,10 @@ new Vue({
         return {
             loginDialogVisible: true,
             loginForm: {
-                pass: ''
-            },
-            settingForm: {
                 identityOptions: [],
                 identitySelected: [],
                 ontIdSelected: '',
+                identityPass: ''
             }
         }
     },
@@ -21,9 +19,9 @@ new Vue({
             try {
                 let url = Flask.url_for('get_identities');
                 let response = await axios.get(url);
-                this.settingForm.identityOptions = [];
+                this.loginForm.identityOptions = [];
                 for (let i = 0; i < response.data.result.length; i++) {
-                    this.settingForm.identityOptions.push({
+                    this.loginForm.identityOptions.push({
                         value: response.data.result[i].ont_id,
                         label: response.data.result[i].label
                     });
@@ -33,19 +31,26 @@ new Vue({
                 console.log(error);
             }
         },
+        async changeToFirstIdentity() {
+            if (this.loginForm.identitySelected.length === 0 && this.loginForm.identityOptions.length !== 0) {
+                let firstOntId = this.loginForm.identityOptions[0].value;
+                this.loginForm.identitySelected = [firstOntId];
+                this.loginForm.ontIdSelected = firstOntId;
+            }
+        },
         async createIdentity() {
-            let label = await this.$prompt('Account Label:', 'Import Account', {
+            let label = await this.$prompt('Identity Label:', 'Create Identity', {
                 confirmButtonText: 'OK',
                 cancelButtonText: 'Cancel',
                 inputPattern: /\S{1,}/,
                 inputErrorMessage: 'invalid label'
             }).catch(() => {
-                this.$message.warning('Import canceled');
+                this.$message.warning('Create canceled');
             });
             if (label === undefined) {
                 return;
             }
-            let password = await this.$prompt('Account Password', 'Import Account', {
+            let password = await this.$prompt('Identity Password', 'Create Account', {
                 confirmButtonText: 'OK',
                 cancelButtonText: 'Cancel',
                 inputPattern: /\S{1,}/,
@@ -63,8 +68,8 @@ new Vue({
                     'label': label.value,
                     'password': password.value
                 });
-                this.settingForm.newIdentityHexPrivateKey = response.data.hex_private_key;
-                this.settingForm.newIdentityPrivateKeyDialogVisible = true;
+                this.loginForm.newIdentityHexPrivateKey = response.data.hex_private_key;
+                this.loginForm.newIdentityPrivateKeyDialogVisible = true;
                 await this.getIdentities();
             } catch (error) {
                 console.log(error);
@@ -74,23 +79,52 @@ new Vue({
             try {
                 let url = Flask.url_for('identity_change');
                 let response = await axios.post(url, {'ont_id_selected': value[0]});
-                this.settingForm.ontIdSelected = value[0];
+                this.loginForm.ontIdSelected = value[0];
                 this.$message({
                     type: 'success',
                     message: response.data.result,
-                    duration: 1200
+                    duration: 3000
                 })
             } catch (error) {
-                console.log(error);
                 this.$message({
                     message: error.response.data.result,
                     type: 'error',
-                    duration: 2400
+                    duration: 3000
                 })
+            }
+        },
+        async login() {
+            if (this.loginForm.identityPass === '') {
+                this.$message({
+                    type: 'error',
+                    message: 'Please input password',
+                    duration: 3000
+                });
+                return
+            }
+            let unlock_identity_url = Flask.url_for('unlock_identity');
+            try {
+                let response = axios.post(unlock_identity_url, {
+                    'ont_id_selected': this.loginForm.ontIdSelected,
+                    'ont_id_password': this.loginForm.identityPass
+                });
+                this.$message({
+                    type: 'success',
+                    message: response.data.result,
+                    duration: 3000
+                });
+            } catch (error) {
+                console.log(error);
+                this.$message({
+                    type: 'error',
+                    message: error.response.data.result,
+                    duration: 3000
+                });
             }
         }
     },
-    created() {
-        this.getIdentities();
+    async created() {
+        await this.getIdentities();
+        await this.changeToFirstIdentity();
     }
 });

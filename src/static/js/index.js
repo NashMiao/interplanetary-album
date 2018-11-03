@@ -82,7 +82,7 @@ new Vue({
             }
         }
     },
-    created() {
-        this.getAlbumArray();
+    async created() {
+        await this.getAlbumArray();
     }
 });

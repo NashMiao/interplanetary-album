@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+import binascii
 import os
 
 import json
@@ -19,10 +19,12 @@ ALBUM_FOLDER = os.path.join(STATIC_FOLDER, 'album')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'bmp'}
 IPFS_HOST = '127.0.0.1'
 IPFS_PORT = 5001
-GAS_LIMIT= 20000000
+GAS_LIMIT = 20000000
 GAS_PRICE = 500
 ONT_RPC_ADDRESS = 'http://polaris3.ont.io:20336'
-CONTRACT_ADDRESS = '34dde9168de302e625b1280b690dc974d7a8a6a4'
+CONTRACT_ADDRESS_HEX = 'b3b6ec1dc84a99e575ca74545028c8aff39bc56d'
+CONTRACT_ADDRESS_BYTEARRAY = bytearray(binascii.a2b_hex(CONTRACT_ADDRESS_HEX))
+CONTRACT_ADDRESS_BYTEARRAY.reverse()
 ONTOLOGY = OntologySdk()
 ONTOLOGY.rpc.set_address(ONT_RPC_ADDRESS)
 with open(os.path.join(CONTRACTS_FOLDER, 'interplanetary-album.json')) as f:
@@ -30,6 +32,6 @@ with open(os.path.join(CONTRACTS_FOLDER, 'interplanetary-album.json')) as f:
     entry_point = CONTRACT_ABI.get('entrypoint', '')
     functions = CONTRACT_ABI['abi']['functions']
     events = CONTRACT_ABI.get('events', list())
-    ABI_INFO = AbiInfo(entry_point, functions, events)
+    ABI_INFO = AbiInfo(CONTRACT_ADDRESS_HEX, entry_point, functions, events)
 WALLET_MANAGER = WalletManager()
 WALLET_MANAGER.open_wallet(WALLET_PATH)

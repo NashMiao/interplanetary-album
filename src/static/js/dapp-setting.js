@@ -246,18 +246,18 @@ let getIdentities = async function () {
 };
 
 let createIdentity = async function () {
-    let label = await this.$prompt('Account Label:', 'Import Account', {
+    let label = await this.$prompt('Identity Label:', 'Create Identity', {
         confirmButtonText: 'OK',
         cancelButtonText: 'Cancel',
         inputPattern: /\S{1,}/,
         inputErrorMessage: 'invalid label'
     }).catch(() => {
-        this.$message.warning('Import canceled');
+        this.$message.warning('Create canceled');
     });
     if (label === undefined) {
         return;
     }
-    let password = await this.$prompt('Account Password', 'Import Account', {
+    let password = await this.$prompt('Identity Password', 'Create Account', {
         confirmButtonText: 'OK',
         cancelButtonText: 'Cancel',
         inputPattern: /\S{1,}/,
