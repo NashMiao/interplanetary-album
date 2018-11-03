@@ -13,7 +13,7 @@ new Vue({
     },
     methods: {
         reloadLoginPage() {
-            location.reload()
+            window.location.reload();
         },
         async getIdentities() {
             try {
@@ -104,7 +104,7 @@ new Vue({
             }
             let unlock_identity_url = Flask.url_for('unlock_identity');
             try {
-                let response = axios.post(unlock_identity_url, {
+                let response = await axios.post(unlock_identity_url, {
                     'ont_id_selected': this.loginForm.ontIdSelected,
                     'ont_id_password': this.loginForm.identityPass
                 });
@@ -114,13 +114,13 @@ new Vue({
                     duration: 3000
                 });
             } catch (error) {
-                console.log(error);
                 this.$message({
                     type: 'error',
                     message: error.response.data.result,
                     duration: 3000
                 });
             }
+            window.location.replace('http://127.0.0.1:5000/');
         }
     },
     async created() {
