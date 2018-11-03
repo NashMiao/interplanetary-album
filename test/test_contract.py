@@ -29,12 +29,11 @@ with open(contracts_path) as f:
     abi_info = AbiInfo(contract_address_hex, entry_point, functions, events)
 wallet_manager = WalletManager()
 wallet_manager.open_wallet(wallet_path)
-password = 'password'
+password =input('password: ')
 gas_limit = 20000000
 gas_price = 500
 acct = wallet_manager.get_account('AKeDu9QW6hfAhwpvCwNNwkEQt1LkUQpBpW', password)
 ont_id_acct = wallet_manager.get_account('did:ont:AHBB3LQNpqXjCLathy7vTNgmQ1cGSj8S9Z', password)
-
 
 class TestOep4(unittest.TestCase):
     def test_put_one_item(self):
