@@ -2,18 +2,21 @@
 # -*- coding: utf-8 -*-
 
 import os
+import stat
+import shutil
 import binascii
+import subprocess
 
 import ipfsapi
-import subprocess
-from PIL import Image, ImageFile
-
 from flask_jsglue import JSGlue
+from PIL import Image, ImageFile
+from werkzeug.utils import secure_filename
+from flask import Flask, request, json, send_from_directory, render_template, redirect, url_for
+
+from ontology.utils import util
 from ontology.account.account import Account
 from ontology.exception.exception import SDKException
-from ontology.utils import util
-from werkzeug.utils import secure_filename
-from flask import Flask, flash, request, json, send_from_directory, render_template, redirect, url_for
+from ontology.wallet.wallet_manager import WalletManager
 
 ipfs_daemon = subprocess.Popen("ipfs daemon", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
@@ -24,9 +27,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 jsglue = JSGlue()
 jsglue.init_app(app)
 default_identity_account = None
-
-# identity = app.config['WALLET_MANAGER'].get_default_identity()
-# account = app.config['WALLET_MANAGER'].get_default_account()
+default_wallet_account = None
 
 try:
     ipfs = ipfsapi.connect(app.config['IPFS_HOST'], app.config['IPFS_PORT'])
@@ -34,6 +35,18 @@ except ipfsapi.exceptions.ConnectionError:
     print('Failed to establish a new connection to IPFS node...')
     exit(1)
 album = list()
+
+
+def handle_read_only_remove_error(func, path, exc_info):
+    os.chmod(path, stat.S_IWRITE)
+    func(path)
+
+
+def ensure_remove_dir_if_exists(path):
+    if os.path.isdir(path):
+        shutil.rmtree(path, ignore_errors=False, onerror=handle_read_only_remove_error)
+        return True
+    return False
 
 
 def put_one_item_to_contract(ont_id_acct: Account, ipfs_address: str, ext: str, payer_acct: Account) -> str:
@@ -123,7 +136,7 @@ def allowed_file(filename):
 
 @app.route('/', methods=['GET'])
 def index():
-    if default_identity_account is None:
+    if not isinstance(default_identity_account, Account):
         return redirect('login')
     else:
         return render_template('index.html')
@@ -131,7 +144,23 @@ def index():
 
 @app.route('/login')
 def login():
-    return render_template('login.html')
+    if isinstance(default_identity_account, Account):
+        return redirect('')
+    else:
+        return render_template('login.html')
+
+
+@app.route('/get_default_wallet_account')
+def get_default_wallet_account():
+    if isinstance(app.config['WALLET_MANAGER'], WalletManager):
+        default_wallet_account = app.config['WALLET_MANAGER'].get_default_account()
+        return json.jsonify({'label': default_wallet_account.label, 'b58_address': default_wallet_account.address}), 200
+    return json.jsonify({'result'}), 500
+
+
+@app.route('/get_default_identity')
+def get_default_identity():
+    pass
 
 
 @app.route('/unlock_identity', methods=['POST'])
@@ -142,7 +171,8 @@ def unlock_identity():
     try:
         default_identity_account = app.config['WALLET_MANAGER'].get_account(ont_id_selected, ont_id_password)
     except SDKException as e:
-        return json.jsonify({'result': e.args[1]}), 500
+        redirect_url = request.url.replace('unlock_identity', 'login')
+        return json.jsonify({'result': e.args[1], 'redirect_url': redirect_url}), 500
     if isinstance(default_identity_account, Account):
         msg = ''.join(['unlock ', ont_id_selected, ' successful!'])
         redirect_url = request.url.replace('unlock_identity', '')
@@ -169,10 +199,10 @@ def get_album_array():
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
     file = request.files['file']
-    print(file)
     if file and allowed_file(file.filename):
+        print('file: ', file)
         filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+        file.save(os.path.join(app.config['ASSETS_FOLDER'], filename))
         add_assets_to_ipfs()
         return json.jsonify({'result': filename}), 200
     else:
@@ -212,6 +242,15 @@ def get_accounts():
     return json.jsonify({'result': address_list}), 200
 
 
+@app.route('/is_default_wallet_account_unlock', methods=['GET'])
+def is_default_wallet_account_unlock():
+    global default_wallet_account
+    if isinstance(default_wallet_account, Account):
+        return json.jsonify({'result': True}), 200
+    else:
+        return json.jsonify({'result': False}), 200
+
+
 @app.route('/create_account', methods=['POST'])
 def create_account():
     password = request.json.get('password')
@@ -240,10 +279,13 @@ def remove_account():
 @app.route('/account_change', methods=['POST'])
 def account_change():
     b58_address_selected = request.json.get('b58_address_selected')
+    password = request.json.get('password')
     try:
         app.config['WALLET_MANAGER'].get_wallet().set_default_account_by_address(b58_address_selected)
-    except SDKException:
-        return json.jsonify({'result': 'Invalid address'}), 400
+        global default_wallet_account
+        default_wallet_account = app.config['WALLER_MANAGER'].get_account(b58_address_selected, password)
+    except SDKException as e:
+        return json.jsonify({'result': e.args[1]}), 400
     app.config['WALLET_MANAGER'].save()
     return json.jsonify({'result': 'Change successful'}), 200
 
@@ -316,9 +358,11 @@ def remove_identity():
 @app.route('/identity_change', methods=['POST'])
 def identity_change():
     ont_id_selected = request.json.get('ont_id_selected')
-    print(ont_id_selected)
+    password = request.json.get('password')
     try:
         app.config['WALLET_MANAGER'].get_wallet().set_default_identity_by_ont_id(ont_id_selected)
+        global default_identity_account
+        default_identity_account = app.config['WALLET_MANAGER'].get_account(ont_id_selected, password)
     except SDKException:
         return json.jsonify({'result': 'Invalid OntId'}), 400
     app.config['WALLET_MANAGER'].save()

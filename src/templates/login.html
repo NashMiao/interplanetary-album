@@ -23,7 +23,9 @@
     <el-dialog
             title="Welcome Back!"
             :visible.sync="loginDialogVisible"
-            width="40%">
+            width="40%"
+            :close-on-click-modal="false"
+            :before-close="handleLoginDialogClose">
         <el-row :gutter="25"><img src="static/favicon.jpg" height="200px" alt=""></el-row>
         <el-form :model="loginForm" status-icon ref="loginForm" label-width="120px"
                  class="demo-ruleForm">
@@ -33,7 +35,6 @@
                         <el-cascader
                                 expand-trigger="hover"
                                 filterable
-                                show-close="false"
                                 :options="loginForm.identityOptions"
                                 v-model="loginForm.identitySelected"
                                 @change="identityChange">

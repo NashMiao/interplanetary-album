@@ -54,11 +54,57 @@
                         drag
                         action="upload_file"
                         multiple
-                        :before-upload="beforeImgUpload">
+                        :before-upload="beforeImgUpload"
+                        :on-success="handleUploadSuccess"
+                        :on-error="handleUploadError">
                     <i class="el-icon-upload"></i>
                     <div class="el-upload__text">Drop file here or <em>click to upload</em></div>
-                    <div class="el-upload__tip" slot="tip">jpg/png/bmp files with a size less than 10MB</div>
+                    <div class="el-upload__tip" slot="tip">jpeg/png/bmp files with a size less than 10MB</div>
                 </el-upload>
+            </div>
+            <div style="width:2000px; margin:auto" align=center>
+                <el-dialog
+                        title="The decentralized album awaits!"
+                        :visible.sync="uploadDialogVisible"
+                        width="40%">
+                    <el-row :gutter="25"><img src="static/favicon.jpg" height="200px" alt=""></el-row>
+                    <el-form :model="uploadForm" status-icon ref="uploadForm" label-width="120px"
+                             class="demo-ruleForm">
+                        <el-row :gutter="25">
+                            <el-col :span="10">
+                                <el-form-item label="Payer Account">
+                                    <el-cascader
+                                            expand-trigger="hover"
+                                            filterable
+                                            :options="settingForm.accountOptions"
+                                            v-model="settingForm.accountSelected"
+                                            @change="accountChange">
+                                    </el-cascader>
+
+                                </el-form-item>
+                            </el-col>
+                            <el-col :span="14">
+                                <el-input
+                                        v-model="settingForm.b58AddressSelected"
+                                        :disabled="true">
+                                </el-input>
+                            </el-col>
+                        </el-row>
+                        <el-row>
+                            <el-form-item label="Password" prop="pass">
+                                <div class="block" style="margin-bottom: 15px;">
+                                    <el-input suffix-icon="el-icon-edit-outline" type="password"
+                                              v-model="uploadForm.uploadPayAcctPass">
+                                    </el-input>
+                                </div>
+                            </el-form-item>
+                        </el-row>
+                    </el-form>
+                    <span slot="footer" class="dialog-footer">
+                        <el-button @click="dialogVisible = false">Cancel</el-button>
+                        <el-button type="primary" @click="dialogVisible = false">Confirm</el-button>
+                    </span>
+                </el-dialog>
             </div>
         </el-tab-pane>
 

@@ -3,6 +3,8 @@ new Vue({
     data: function () {
         return {
             labelPosition: 'right',
+            uploadDialogVisible: uploadDialogVisible,
+            uploadForm: uploadForm,
             unlockDialogVisible: true,
             isSwitchToSettings: true,
             albumArray: [],
@@ -15,6 +17,8 @@ new Vue({
     },
     methods: {
         beforeImgUpload: beforeImgUpload,
+        handleUploadSuccess: handleUploadSuccess,
+        handleUploadError: handleUploadError,
         viewOriginalImg: viewOriginalImg,
         shareIpfsAddress: shareIpfsAddress,
         getAccounts: getAccounts,
@@ -34,9 +38,8 @@ new Vue({
         networkChange: networkChange,
         changeContract: changeContract,
         getContractAddress: getContractAddress,
-        async unlockIdentityAccount() {
-
-        },
+        setDefaultAccount: setDefaultAccount,
+        setDefaultIdentity: setDefaultIdentity,
         async getAlbumArray() {
             let url = Flask.url_for('get_album_array');
             try {
@@ -53,16 +56,8 @@ new Vue({
                     await this.getIdentities();
                     await this.getContractAddress();
                     this.isSwitchToSettings = false;
-                    if (this.settingForm.accountSelected.length === 0 && this.settingForm.accountOptions.length !== 0) {
-                        let firstB58Address = this.settingForm.accountOptions[0].value;
-                        this.settingForm.accountSelected = [firstB58Address];
-                        this.settingForm.b58AddressSelected = firstB58Address;
-                    }
-                    if (this.settingForm.identitySelected.length === 0 && this.settingForm.identityOptions.length !== 0) {
-                        let firstOntId = this.settingForm.identityOptions[0].value;
-                        this.settingForm.identitySelected = [firstOntId];
-                        this.settingForm.ontIdSelected = firstOntId;
-                    }
+                    await this.setDefaultAccount();
+                    await this.setDefaultIdentity();
                 }
             }
             else if (tab.label === 'Collapse Album') {
@@ -84,5 +79,7 @@ new Vue({
     },
     async created() {
         await this.getAlbumArray();
+        await this.getAccounts();
+
     }
 });

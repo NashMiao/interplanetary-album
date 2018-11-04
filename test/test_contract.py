@@ -6,10 +6,9 @@ import json
 import unittest
 import binascii
 
-from ontology.common.address import Address
 from ontology.ont_sdk import OntologySdk
-from ontology.smart_contract.neo_contract.abi.abi_info import AbiInfo
 from ontology.wallet.wallet_manager import WalletManager
+from ontology.smart_contract.neo_contract.abi.abi_info import AbiInfo
 
 ontology = OntologySdk()
 remote_rpc_address = 'http://polaris3.ont.io:20336'

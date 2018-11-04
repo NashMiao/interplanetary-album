@@ -15,6 +15,16 @@ new Vue({
         reloadLoginPage() {
             window.location.reload();
         },
+        async handleLoginDialogClose(done) {
+            await this.$confirm('Are you sure to close this dialog?', 'Warning', {
+                confirmButtonText: 'OK',
+                cancelButtonText: 'Cancel',
+                type: 'warning'
+            }).then(_ => {
+                window.location.reload();
+            }).catch(_ => {
+            });
+        },
         async getIdentities() {
             try {
                 let url = Flask.url_for('get_identities');
