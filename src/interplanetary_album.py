@@ -17,7 +17,7 @@ from flask import Flask, flash, request, json, send_from_directory, render_templ
 
 ipfs_daemon = subprocess.Popen("ipfs daemon", stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 static_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
-template_folder = os.path.join(static_folder, 'html')
+template_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates')
 app = Flask('IPAblum', static_folder=static_folder, template_folder=template_folder)
 app.config.from_object('default_settings')
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -36,12 +36,39 @@ except ipfsapi.exceptions.ConnectionError:
 album = list()
 
 
+def put_one_item_to_contract(ont_id_acct: Account, ipfs_address: str, ext: str, payer_acct: Account) -> str:
+    put_one_item_func = app.config['ABI_INFO'].get_function('put_one_item')
+    put_one_item_func.set_params_value((ont_id_acct.get_address().to_array(), ipfs_address, ext))
+    gas_limit = app.config['GAS_LIMIT']
+    gas_price = app.config['GAS_PRICE']
+    contract_address_bytearray = app.config['CONTRACT_ADDRESS_BYTEARRAY']
+    tx_hash = app.config['ONTOLOGY'].neo_vm().send_transaction(contract_address_bytearray, ont_id_acct, payer_acct,
+                                                               gas_limit, gas_price, put_one_item_func, False)
+    return tx_hash
+
+
+def get_item_list_from_contract(ont_id: str):
+    get_item_list_func = app.config['ABI_INFO'].get_function('get_item_list')
+    ont_id_acct = app.config['WALLET_MANAGER'].get_account(ont_id)
+    get_item_list_func.set_params_value((ont_id_acct.get_address().to_array(),))
+    item_list = app.config['ONTOLOGY'].neo_vm().send_transaction(app.config['CONTRACT_ADDRESS_BYTEARRAY'], None, None,
+                                                                 0, 0, get_item_list_func, True)
+    if item_list is None:
+        item_list = list()
+    for index in range(len(item_list)):
+        item_list[index][0] = binascii.a2b_hex(item_list[index][0]).decode('ascii')
+        item_list[index][1] = binascii.a2b_hex(item_list[index][1]).decode('ascii')
+    print(item_list)
+
+
 def add_assets_to_ipfs():
     files = os.listdir(app.config['ASSETS_FOLDER'])
     for file in files:
+        file_folder, filename = os.path.split(file)
         if '.jpg' in file or '.bmp' in file or '.jpeg' in file or '.png' in file:
             result = ipfs.add(os.path.join(app.config['ASSETS_FOLDER'], file))
-            print(result)
+            global default_identity_account
+            put_one_item_to_contract(default_identity_account.get_address().to_array(), )
             global album
             album.append(result)
 
@@ -94,36 +121,8 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
 
 
-# def put_one_item(ont_id: str, ipfs_address: str, ext: str, payer_acct: Account):
-#     put_one_item_func = app.config['ABI_INFO'].get_function('put_one_item')
-#     default_ont_id = app.config['WALLET_MANAGER'].get_default_identity().ont_id
-#     ont_id_acct = app.config['WALLET_MANAGER'].get_account(ont_id)
-#     put_one_item_func.set_params_value((ont_id_acct.get_address().to_array(), ipfs_address, ext))
-#     gas_limit = app.config['GAS_LIMIT']
-#     gas_price = app.config['GAS_PRICE']
-#     tx_hash = app.config['ONTOLOGY'].neo_vm().send_transaction(app.config['CONTRACT_ADDRESS_BYTEARRAY'], ont_id_acct,
-#                                                                payer_acct, gas_limit,
-#                                                                gas_price, put_one_item_func, False)
-#     print(tx_hash)
-#
-#
-# def test_get_item_list(ont_id: str):
-#     get_item_list_func = app.config['ABI_INFO'].get_function('get_item_list')
-#     ont_id_acct = app.config['WALLET_MANAGER'].get_account(ont_id)
-#     get_item_list_func.set_params_value((ont_id_acct.get_address().to_array(),))
-#     item_list = ontology.neo_vm().send_transaction(contract_address_bytearray, None, None, 0, 0, get_item_list_func,
-#                                                    True)
-#     if item_list is None:
-#         item_list = list()
-#     for index in range(len(item_list)):
-#         item_list[index][0] = binascii.a2b_hex(item_list[index][0]).decode('ascii')
-#         item_list[index][1] = binascii.a2b_hex(item_list[index][1]).decode('ascii')
-#     print(item_list)
-
-
 @app.route('/', methods=['GET'])
 def index():
-    add_assets_to_ipfs()
     if default_identity_account is None:
         return redirect('login')
     else:
@@ -170,6 +169,7 @@ def get_album_array():
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
     file = request.files['file']
+    print(file)
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
