@@ -3,7 +3,7 @@
     "version": "1.1",
     "createTime": "2018-10-31 16:42:39",
     "defaultOntid": "did:ont:AHBB3LQNpqXjCLathy7vTNgmQ1cGSj8S9Z",
-    "defaultAccountAddress": "AbBmxR38dcE1QMYkhcgVmcToCv5Q4Uvsc3",
+    "defaultAccountAddress": "AKeDu9QW6hfAhwpvCwNNwkEQt1LkUQpBpW",
     "scrypt": {
         "n": 16384,
         "r": 8,
@@ -38,7 +38,7 @@
             "address": "AKeDu9QW6hfAhwpvCwNNwkEQt1LkUQpBpW",
             "algorithm": "ECDSA",
             "enc-alg": "aes-256-gcm",
-            "isDefault": false,
+            "isDefault": true,
             "key": "bSm3F4cLIe3UUK7iNQgiW2j5zXVXLRTsPUqJ2ymZuyc+gdoPNSlJRJsZ5Pi/+PJP",
             "label": "MagicAccount",
             "lock": false,
