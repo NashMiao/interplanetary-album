@@ -3,8 +3,8 @@
 
 from boa.builtins import concat
 from boa.interop.System.Runtime import CheckWitness, Serialize, Deserialize
-from boa.interop.System.Action import RegisterAction
 from boa.interop.System.Storage import Put, GetContext, Get
+from boa.interop.System.Action import RegisterAction
 
 ctx = GetContext()
 
@@ -21,8 +21,8 @@ def main(operation, args):
         return put_one_item(args[0], args[1], args[2])
     elif operation == 'get_item_list':
         return get_item_list(args[0])
-    elif operation == 'del_item_list':
-        return del_item_list(args[0], args[1])
+    elif operation == 'del_ont_item':
+        return del_ont_item(args[0], args[1])
     else:
         return False
 
@@ -33,7 +33,7 @@ def concat_key(str1, str2):
 
 def is_item_exist(item_list, ipfs_hash):
     for item in item_list:
-        if item['ipfsHash'] == ipfs_hash:
+        if item[0] == ipfs_hash:
             return True
     return False
 
@@ -49,7 +49,7 @@ def put_one_item(ont_id, ipfs_hash, ext):
     if is_item_exist(item_list, ipfs_hash):
         itemPutFail(ipfs_hash)
         return False
-    item = {'ipfsHash': ipfs_hash, 'ext': ext}
+    item = [ipfs_hash, ext]
     item_list.append(item)
     item_list_info = Serialize(item_list)
     Put(ctx, item_key, item_list_info)
@@ -60,11 +60,13 @@ def put_one_item(ont_id, ipfs_hash, ext):
 def get_item_list(ont_id):
     item_key = concat_key(ITEM_PREFIX, ont_id)
     item_list_info = Get(ctx, item_key)
-    item_list = Deserialize(item_list_info)
+    item_list = []
+    if item_list_info:
+        item_list = Deserialize(item_list_info)
     return item_list
 
 
-def del_item_list(ont_id, ipfs_hash):
+def del_ont_item(ont_id, ipfs_hash):
     if not CheckWitness(ont_id):
         return False
     item_key = concat_key(ITEM_PREFIX, ont_id)
@@ -73,7 +75,7 @@ def del_item_list(ont_id, ipfs_hash):
     if item_list_info:
         item_list = Deserialize(item_list_info)
     for item in item_list:
-        if item['ipfsHash'] == ipfs_hash:
+        if item[0] == ipfs_hash:
             item_list.remove(item)
             itemRemove(ipfs_hash)
             return True
