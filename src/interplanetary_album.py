@@ -37,6 +37,13 @@ except ipfsapi.exceptions.ConnectionError:
 album = list()
 
 
+def remove_file_if_exists(path):
+    if os.path.isfile(path):
+        os.remove(path)
+        return True
+    return False
+
+
 def handle_read_only_remove_error(func, path, exc_info):
     os.chmod(path, stat.S_IWRITE)
     func(path)
@@ -60,34 +67,26 @@ def put_one_item_to_contract(ont_id_acct: Account, ipfs_address: str, ext: str, 
     return tx_hash
 
 
-def get_item_list_from_contract(ont_id: str):
+def get_item_list_from_contract(identity_acct: Account) -> list:
     get_item_list_func = app.config['ABI_INFO'].get_function('get_item_list')
-    ont_id_acct = app.config['WALLET_MANAGER'].get_account(ont_id)
-    get_item_list_func.set_params_value((ont_id_acct.get_address().to_array(),))
-    item_list = app.config['ONTOLOGY'].neo_vm().send_transaction(app.config['CONTRACT_ADDRESS_BYTEARRAY'], None, None,
-                                                                 0, 0, get_item_list_func, True)
-    if item_list is None:
+    get_item_list_func.set_params_value((identity_acct.get_address().to_array(),))
+    contract_address_bytearray = app.config['CONTRACT_ADDRESS_BYTEARRAY']
+    item_list = app.config['ONTOLOGY'].neo_vm().send_transaction(contract_address_bytearray, None, None, 0, 0,
+                                                                 get_item_list_func, True)
+    if item_list is None or None in item_list:
         item_list = list()
     for index in range(len(item_list)):
         item_list[index][0] = binascii.a2b_hex(item_list[index][0]).decode('ascii')
         item_list[index][1] = binascii.a2b_hex(item_list[index][1]).decode('ascii')
-    print(item_list)
+    return item_list
 
 
-def add_assets_to_ipfs():
-    files = os.listdir(app.config['ASSETS_FOLDER'])
-    for file in files:
-        file_folder, filename = os.path.split(file)
-        if '.jpg' in file or '.bmp' in file or '.jpeg' in file or '.png' in file:
-            result = ipfs.add(os.path.join(app.config['ASSETS_FOLDER'], file))
-            global default_identity_account
-            put_one_item_to_contract(default_identity_account.get_address().to_array(), )
-            global album
-            album.append(result)
-
-
-def get_album_from_contract():
-    func = app.config['ABI_INFO'].get_function('get_item_list')
+def add_assets_to_ipfs(img_path: str, identity_acct: Account, payer_acct: Account):
+    file_folder, filename = os.path.split(img_path)
+    if ('.jpg' or '.bmp' or '.jpeg' or '.png') in filename:
+        result = ipfs.add(os.path.join(app.config['ASSETS_FOLDER'], img_path))
+        filename, ext = os.path.splitext(filename)
+        put_one_item_to_contract(identity_acct, result['Hash'], ext, payer_acct)
 
 
 def create_thumbnail(img_path):
@@ -117,17 +116,19 @@ def convert_to_jpg(img_path):
     img.save(''.join([img_folder, img_filename + '.jpg']))
 
 
-def get_album_from_ipfs():
-    global album
-    for img in album:
-        filename, ext = os.path.splitext(img['Name'])
-        filename = img['Hash']
-        img_path = os.path.join(app.config['ALBUM_FOLDER'], filename + ext)
+def get_album_from_ipfs(item_list: list):
+    for item in item_list:
+        ipfs_address = item[0]
+        ext = item[1]
+        img_path = os.path.join(app.config['ALBUM_FOLDER'], ipfs_address + ext)
         if not os.path.exists(img_path):
-            img_data = ipfs.cat(img['Hash'])
-            if img_data is not None:
-                with open(img_path, 'wb') as f:
-                    f.write(img_data)
+            try:
+                img_data = ipfs.cat(ipfs_address)
+                if img_data is not None:
+                    with open(img_path, 'wb') as f:
+                        f.write(img_data)
+            except ipfsapi.exceptions as e:
+                print(e.args[1])
 
 
 def allowed_file(filename):
@@ -136,10 +137,22 @@ def allowed_file(filename):
 
 @app.route('/', methods=['GET'])
 def index():
+    global default_identity_account
     if not isinstance(default_identity_account, Account):
         return redirect('login')
     else:
+        try:
+            if isinstance(default_identity_account, Account):
+                item_list = get_item_list_from_contract(default_identity_account)
+                get_album_from_ipfs(item_list)
+        except SDKException:
+            pass
         return render_template('index.html')
+
+
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory(static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
 
 
 @app.route('/login')
@@ -150,17 +163,30 @@ def login():
         return render_template('login.html')
 
 
-@app.route('/get_default_wallet_account')
-def get_default_wallet_account():
+@app.route('/get_default_wallet_account_data')
+def get_default_wallet_account_data():
     if isinstance(app.config['WALLET_MANAGER'], WalletManager):
-        default_wallet_account = app.config['WALLET_MANAGER'].get_default_account()
-        return json.jsonify({'label': default_wallet_account.label, 'b58_address': default_wallet_account.address}), 200
-    return json.jsonify({'result'}), 500
+        try:
+            default_wallet_account_data = app.config['WALLET_MANAGER'].get_default_account()
+            label = default_wallet_account_data.label
+            b58_address = default_wallet_account_data.address
+            return json.jsonify({'label': label, 'b58_address': b58_address}), 200
+        except SDKException as e:
+            return json.jsonify({'result': e.args[1]}), 500
+    return json.jsonify({'result': 'WalletManager error'}), 501
 
 
-@app.route('/get_default_identity')
-def get_default_identity():
-    pass
+@app.route('/get_default_identity_data', methods=['GET'])
+def get_default_identity_data():
+    wallet_manager = app.config['WALLET_MANAGER']
+    if isinstance(wallet_manager, WalletManager):
+        try:
+            default_identity = wallet_manager.get_default_identity()
+            return json.jsonify({'label': default_identity.label, 'ont_id': default_identity.ont_id}), 200
+        except SDKException as e:
+            return json.jsonify({'result': e.args[1]}), 500
+    else:
+        return json.jsonify({'result': 'Wallet manager error'}), 501
 
 
 @app.route('/unlock_identity', methods=['POST'])
@@ -182,31 +208,38 @@ def unlock_identity():
         return json.jsonify({'result': 'unlock failed!', 'redirect_url': redirect_url}), 501
 
 
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory(static_folder, 'favicon.ico', mimetype='image/vnd.microsoft.icon')
-
-
 @app.route('/get_album_array')
 def get_album_array():
+    global default_identity_account
+    if not isinstance(default_identity_account, Account):
+        return json.jsonify({'result': 'default identity is locked'}), 500
+    item_list = get_item_list_from_contract(default_identity_account)
+    get_album_from_ipfs(item_list)
     album_img = os.listdir(app.config['ALBUM_FOLDER'])
-    get_album_from_ipfs()
     for index in range(len(album_img)):
         album_img[index] = ''.join(['/static/album/', album_img[index]])
-    return json.jsonify({'result': album_img})
+    return json.jsonify({'result': album_img}), 200
 
 
 @app.route('/upload_file', methods=['POST'])
 def upload_file():
     file = request.files['file']
+    global default_identity_account
+    global default_wallet_account
+    if not isinstance(default_identity_account, Account):
+        return json.jsonify({'result': 'default identity is locked'}), 500
+    if not isinstance(default_wallet_account, Account):
+        return json.jsonify({'result': 'default account is locked'}), 501
     if file and allowed_file(file.filename):
         print('file: ', file)
         filename = secure_filename(file.filename)
-        file.save(os.path.join(app.config['ASSETS_FOLDER'], filename))
-        add_assets_to_ipfs()
+        img_path = os.path.join(app.config['ASSETS_FOLDER'], filename)
+        file.save(img_path)
+        add_assets_to_ipfs(img_path, default_identity_account, default_wallet_account)
+        remove_file_if_exists(img_path)
         return json.jsonify({'result': filename}), 200
     else:
-        return json.jsonify({'result': 'file is not allowed'}), 500
+        return json.jsonify({'result': 'file is not allowed'}), 502
 
 
 @app.route('/query_balance', methods=['POST'])
@@ -261,6 +294,20 @@ def create_account():
     return json.jsonify({'hex_private_key': hex_private_key})
 
 
+@app.route('/import_account', methods=['POST'])
+def import_account():
+    label = request.json.get('label')
+    password = request.json.get('password')
+    hex_private_key = request.json.get('hex_private_key')
+    try:
+        account = app.config['WALLET_MANAGER'].create_account_from_private_key(label, password, hex_private_key)
+    except ValueError as e:
+        return json.jsonify({'msg': 'account exists.'}), 500
+    b58_address = account.get_address()
+    app.config['WALLET_MANAGER'].save()
+    return json.jsonify({'result': b58_address}), 200
+
+
 @app.route('/remove_account', methods=['POST'])
 def remove_account():
     b58_address_remove = request.json.get('b58_address_remove')
@@ -283,7 +330,7 @@ def account_change():
     try:
         app.config['WALLET_MANAGER'].get_wallet().set_default_account_by_address(b58_address_selected)
         global default_wallet_account
-        default_wallet_account = app.config['WALLER_MANAGER'].get_account(b58_address_selected, password)
+        default_wallet_account = app.config['WALLET_MANAGER'].get_account(b58_address_selected, password)
     except SDKException as e:
         return json.jsonify({'result': e.args[1]}), 400
     app.config['WALLET_MANAGER'].save()
@@ -326,20 +373,6 @@ def import_identity():
     return json.jsonify({'hex_private_key': hex_private_key, 'ont_id': new_identity.ont_id}), 200
 
 
-@app.route('/import_account', methods=['POST'])
-def import_account():
-    label = request.json.get('label')
-    password = request.json.get('password')
-    hex_private_key = request.json.get('hex_private_key')
-    try:
-        account = app.config['WALLET_MANAGER'].create_account_from_private_key(label, password, hex_private_key)
-    except ValueError as e:
-        return json.jsonify({'msg': 'account exists.'}), 500
-    b58_address = account.get_address()
-    app.config['WALLET_MANAGER'].save()
-    return json.jsonify({'result': b58_address}), 200
-
-
 @app.route('/remove_identity', methods=['POST'])
 def remove_identity():
     ont_id_remove = request.json.get('ont_id_remove')
@@ -374,38 +407,35 @@ def change_net():
     network_selected = request.json.get('network_selected')
     if network_selected == 'MainNet':
         remote_rpc_address = 'http://dappnode1.ont.io:20336'
-        with app.app_context() as context:
-            app.config['ONTOLOGY'].set_rpc(remote_rpc_address)
-            sdk_rpc_address = app.config['ONTOLOGY'].get_rpc().addr
-            if sdk_rpc_address != remote_rpc_address:
-                result = ''.join(['remote rpc address set failed. the rpc address now used is ', sdk_rpc_address])
-                return json.jsonify({'result': result}), 409
+        app.config['ONTOLOGY'].set_rpc(remote_rpc_address)
+        sdk_rpc_address = app.config['ONTOLOGY'].get_rpc().addr
+        if sdk_rpc_address != remote_rpc_address:
+            result = ''.join(['remote rpc address set failed. the rpc address now used is ', sdk_rpc_address])
+            return json.jsonify({'result': result}), 409
     elif network_selected == 'TestNet':
         remote_rpc_address = 'http://polaris3.ont.io:20336'
-        with app.app_context() as context:
-            app.config['ONTOLOGY'].set_rpc(remote_rpc_address)
-            sdk_rpc_address = app.config['ONTOLOGY'].get_rpc().addr
-            if sdk_rpc_address != remote_rpc_address:
-                result = ''.join(['remote rpc address set failed. the rpc address now used is ', sdk_rpc_address])
-                return json.jsonify({'result': result}), 409
+        app.config['ONTOLOGY'].set_rpc(remote_rpc_address)
+        sdk_rpc_address = app.config['ONTOLOGY'].get_rpc().addr
+        if sdk_rpc_address != remote_rpc_address:
+            result = ''.join(['remote rpc address set failed. the rpc address now used is ', sdk_rpc_address])
+            return json.jsonify({'result': result}), 409
     elif network_selected == 'Localhost':
         remote_rpc_address = 'http://localhost:20336'
-        with app.app_context() as context:
-            app.config['ONTOLOGY'].set_rpc(remote_rpc_address)
-            old_remote_rpc_address = app.config['ONTOLOGY'].get_rpc()
-            sdk_rpc_address = app.config['ONTOLOGY'].get_rpc().addr
-            if sdk_rpc_address != remote_rpc_address:
-                result = ''.join(['remote rpc address set failed. the rpc address now used is ', sdk_rpc_address])
-                return json.jsonify({'result': result}), 409
-            try:
-                app.config['ONTOLOGY'].rpc.get_version()
-            except SDKException as e:
-                app.config['ONTOLOGY'].set_rpc(old_remote_rpc_address)
-                error_msg = 'Other Error, ConnectionError'
-                if error_msg in e.args[1]:
-                    return json.jsonify({'result': 'Connection to localhost node failed.'}), 400
-                else:
-                    return json.jsonify({'result': e.args[1]}), 500
+        app.config['ONTOLOGY'].set_rpc(remote_rpc_address)
+        old_remote_rpc_address = app.config['ONTOLOGY'].get_rpc()
+        sdk_rpc_address = app.config['ONTOLOGY'].get_rpc().addr
+        if sdk_rpc_address != remote_rpc_address:
+            result = ''.join(['remote rpc address set failed. the rpc address now used is ', sdk_rpc_address])
+            return json.jsonify({'result': result}), 409
+        try:
+            app.config['ONTOLOGY'].rpc.get_version()
+        except SDKException as e:
+            app.config['ONTOLOGY'].set_rpc(old_remote_rpc_address)
+            error_msg = 'Other Error, ConnectionError'
+            if error_msg in e.args[1]:
+                return json.jsonify({'result': 'Connection to localhost node failed.'}), 400
+            else:
+                return json.jsonify({'result': e.args[1]}), 500
     else:
         return json.jsonify({'result': 'unsupported network.'}), 501
     return json.jsonify({'result': 'succeed'}), 200

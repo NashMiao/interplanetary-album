@@ -16,7 +16,9 @@ new Vue({
         }
     },
     methods: {
-        beforeImgUpload: beforeImgUpload,
+        beforeUpload: beforeUpload,
+        submitUpload: submitUpload,
+        unlockWalletAccount: unlockWalletAccount,
         handleUploadSuccess: handleUploadSuccess,
         handleUploadError: handleUploadError,
         viewOriginalImg: viewOriginalImg,
@@ -38,8 +40,9 @@ new Vue({
         networkChange: networkChange,
         changeContract: changeContract,
         getContractAddress: getContractAddress,
-        setDefaultAccount: setDefaultAccount,
-        setDefaultIdentity: setDefaultIdentity,
+        isDefaultWalletAccountUnlock: isDefaultWalletAccountUnlock,
+        getDefaultAccountData: getDefaultAccountData,
+        getDefaultIdentityData: getDefaultIdentityData,
         async getAlbumArray() {
             let url = Flask.url_for('get_album_array');
             try {
@@ -52,12 +55,12 @@ new Vue({
         async tabClickHandler(tab, event) {
             if (tab.label === 'DApp Settings') {
                 if (this.isSwitchToSettings === true) {
+                    this.isSwitchToSettings = false;
                     await this.getAccounts();
                     await this.getIdentities();
                     await this.getContractAddress();
-                    this.isSwitchToSettings = false;
-                    await this.setDefaultAccount();
-                    await this.setDefaultIdentity();
+                    await this.getDefaultAccountData();
+                    await this.getDefaultIdentityData();
                 }
             }
             else if (tab.label === 'Collapse Album') {
@@ -80,6 +83,7 @@ new Vue({
     async created() {
         await this.getAlbumArray();
         await this.getAccounts();
-
+        await this.getDefaultAccountData();
+        await this.getDefaultIdentityData();
     }
 });

@@ -1,16 +1,10 @@
 let uploadDialogVisible = false;
 
 let uploadForm = {
-    ontIdSelected: '',
     uploadPayAcctPass: '',
 };
 
-let selectPayer = async function () {
-    await this.getAccounts();
-    this.uploadDialogVisible = true;
-};
-
-let beforeImgUpload = async function (imgFile) {
+let beforeUpload = async function (imgFile) {
     const isJPEG = imgFile.type === 'image/jpeg';
     const isPNG = imgFile.type === 'image/png';
     const isBMP = imgFile.type === 'image/bmp';
@@ -21,26 +15,53 @@ let beforeImgUpload = async function (imgFile) {
     if (!isLt10M) {
         this.$message.error('Picture size can not exceed 10MB!');
     }
-    let url = Flask.url_for('is_default_wallet_account_unlock');
-    try {
-        let response = await axios.get(url);
-        if (response.data.result === false) {
-            await selectPayer();
-        }
-    } catch (error) {
-        console.log(error);
-    }
     return (isJPEG || isBMP || isPNG) && isLt10M;
 };
 
-let handleUploadSuccess = async function (res, file) {
-    console.log(res);
-    console.log(file);
-    this.uploadPayAcctPass = '';
+let unlockWalletAccount = async function () {
+    let b58_address = this.settingForm.b58AddressSelected;
+    let password = this.uploadForm.uploadPayAcctPass;
+    let url = Flask.url_for('account_change');
+    try {
+        let response = await axios.post(url, {'b58_address_selected': b58_address, 'password': password});
+    }
+    catch (error) {
+        this.$message({
+            message: error.response.data.result,
+            type: 'error',
+            duration: 2400
+        });
+        this.uploadDialogVisible = false;
+        return
+    }
+    let is_unlock = await this.isDefaultWalletAccountUnlock();
+    if (is_unlock === true) {
+        this.$refs.upload.submit();
+    }
+    this.uploadForm.uploadPayAcctPass = '';
+    this.uploadDialogVisible = false;
 };
 
-let handleUploadError = async function (res, file) {
-    console.log(res);
+let submitUpload = async function () {
+    let is_unlock = await this.isDefaultWalletAccountUnlock();
+    if (is_unlock === true) {
+        this.$refs.upload.submit();
+    }
+    else {
+        this.uploadDialogVisible = true;
+    }
+};
+
+let handleUploadSuccess = async function (response, file, fileList) {
+    console.log(response);
     console.log(file);
-    this.uploadPayAcctPass = '';
+};
+
+let handleUploadError = async function (err, file, fileList) {
+    this.$message({
+        message: JSON.parse(err.message)['result'],
+        type: 'error',
+        showClose: true
+    });
+    this.$refs.upload.submit();
 };

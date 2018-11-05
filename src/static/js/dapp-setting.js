@@ -29,24 +29,39 @@ let getContractAddress = async function () {
     this.settingForm.contractAddress = response.data.result;
 };
 
-let setDefaultAccount = async function () {
-    if (this.settingForm.accountSelected.length === 0 && this.settingForm.accountOptions.length !== 0) {
-        let firstB58Address = this.settingForm.accountOptions[0].value;
-        this.settingForm.accountSelected = [firstB58Address];
-        this.settingForm.b58AddressSelected = firstB58Address;
+let isDefaultWalletAccountUnlock = async function () {
+    let url = Flask.url_for('is_default_wallet_account_unlock');
+    try {
+        let response = await axios.get(url);
+        return response.data.result;
+    } catch (error) {
+        console.log(error);
+        return false;
     }
 };
 
-let setDefaultIdentity = async function () {
-    if (this.settingForm.identitySelected.length === 0 && this.settingForm.identityOptions.length !== 0) {
-        let firstOntId = this.settingForm.identityOptions[0].value;
-        this.settingForm.identitySelected = [firstOntId];
-        this.settingForm.ontIdSelected = firstOntId;
+let getDefaultAccountData = async function () {
+    let url = Flask.url_for('get_default_wallet_account_data');
+    try {
+        let response = await axios.get(url);
+        let default_b58_address = response.data.b58_address;
+        this.settingForm.accountSelected = [default_b58_address];
+        this.settingForm.b58AddressSelected = default_b58_address;
+    } catch (error) {
+        console.log(error);
     }
 };
 
-let getDefaultIdentity = async function () {
-
+let getDefaultIdentityData = async function () {
+    let url = Flask.url_for('get_default_identity_data');
+    try {
+        let response = await axios.get(url);
+        let default_ont_id = response.data.ont_id;
+        this.settingForm.ontIdSelected = default_ont_id;
+        this.settingForm.identitySelected = [default_ont_id];
+    } catch (error) {
+        console.log(error);
+    }
 };
 
 let changeContract = async function () {
